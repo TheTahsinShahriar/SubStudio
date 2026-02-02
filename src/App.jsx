@@ -205,7 +205,7 @@ const App = () => {
       sub.name,
       sub.handle,
       sub.sub_count,
-      `https://www.youtube.com/channel/${sub.id}`
+      `www.youtube.com/${sub.handle}`
     ]);
 
     autoTable(doc, {
@@ -220,7 +220,7 @@ const App = () => {
       },
       didDrawCell: (data) => {
         if (data.section === 'body' && data.column.index === 3) {
-          const url = data.cell.raw;
+          const url = 'https://' + data.cell.raw;
           doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url });
         }
       }
