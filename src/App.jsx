@@ -97,7 +97,11 @@ const App = () => {
       setSubs(prev => prev.map(sub => sub.id === id ? { ...sub, status } : sub));
       setSweepDir(null);
 
-      if (isTinderMode || filter === 'pending') {
+      // If the item leaves the current view (filtered out), we stay at the current index (which becomes the next item).
+      // If it stays (e.g. 'All' filter), we must advance the index.
+      const itemLeaves = filter !== 'all' && filter !== status;
+
+      if (itemLeaves) {
         if (activeIndex >= filteredSubs.length - 1 && activeIndex > 0) {
           setActiveIndex(prev => prev - 1);
         }
@@ -272,9 +276,6 @@ const App = () => {
               <p className="channel-desc">{sub.description || "The creator hasn't provided a description yet."}</p>
 
               <div className="action-footer">
-                <button className="action-btn keep" onClick={(e) => { e.stopPropagation(); updateStatus(sub.id, 'keep') }}>
-                  {isTinderMode ? "KEEP (→)" : "KEEP (1)"}
-                </button>
                 <button className="action-btn toss" onClick={(e) => { e.stopPropagation(); updateStatus(sub.id, 'toss') }}>
                   {isTinderMode ? "TOSS (←)" : "TOSS (2)"}
                 </button>
@@ -286,6 +287,9 @@ const App = () => {
                     SKIP (↑)
                   </button>
                 )}
+                <button className="action-btn keep" onClick={(e) => { e.stopPropagation(); updateStatus(sub.id, 'keep') }}>
+                  {isTinderMode ? "KEEP (→)" : "KEEP (1)"}
+                </button>
               </div>
 
               <div className="stamp keep">KEEP</div>
