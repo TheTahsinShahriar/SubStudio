@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import subsData from './data/subs.json';
-import { loadGoogleScripts, initTokenClient, handleLogin, fetchSubscriptions, deleteSubscription } from './services/youtube';
+import { loadGoogleScripts, initTokenClient, handleLogin, fetchSubscriptions, deleteSubscription, subscribeToChannel } from './services/youtube';
 import './index.css';
 
 const YouTubeIcon = () => (
@@ -76,29 +78,54 @@ const App = () => {
     const dirMap = { 'keep': 'right', 'toss': 'left', 'archive': 'down' };
     setSweepDir(dirMap[status]);
 
-    // Handle Unsubscribe (Toss) for API Mode
-    if (isApiMode && status === 'toss') {
-      const subToToss = subs.find(s => s.id === id);
-      if (subToToss && subToToss.subscriptionId) {
-        try {
-          await deleteSubscription(subToToss.subscriptionId);
-          console.log(`Unsubscribed from ${subToToss.name}`);
-        } catch (err) {
-          console.error("Failed to unsubscribe", err);
-          // Stop animation if it failed
-          setSweepDir(null);
-          alert("Could not unsubscribe. You might need to sign out and sign in again to grant permissions.");
-          return;
+    // Handle API Actions
+    if (isApiMode) {
+      const sub = subs.find(s => s.id === id);
+
+      // Unsubscribe Logic (Toss OR Archive)
+      if (status === 'toss' || status === 'archive') {
+        if (sub && sub.subscriptionId) {
+          try {
+            await deleteSubscription(sub.subscriptionId);
+            console.log(`Unsubscribed from ${sub.name} (${status})`);
+          } catch (err) {
+            console.error("Failed to unsubscribe", err);
+            setSweepDir(null);
+            alert("Failed to unsubscribe.");
+            return;
+          }
+        }
+      }
+
+      // Subscribe Logic (Keep)
+      if (status === 'keep') {
+        if (sub && !sub.subscriptionId) {
+          try {
+            const newSub = await subscribeToChannel(sub.id);
+            console.log(`Subscribed to ${sub.name}`);
+            setSubs(prev => prev.map(s => s.id === id ? { ...s, subscriptionId: newSub.id } : s));
+          } catch (err) {
+            console.error("Failed to subscribe", err);
+            setSweepDir(null);
+            alert("Failed to subscribe.");
+            return;
+          }
         }
       }
     }
 
     setTimeout(() => {
-      setSubs(prev => prev.map(sub => sub.id === id ? { ...sub, status } : sub));
+      setSubs(prev => prev.map(sub => {
+        if (sub.id === id) {
+          // If we unsubscribed (toss/archive), clear the subscriptionId locally
+          const shouldClearId = (status === 'toss' || status === 'archive') && isApiMode;
+          return { ...sub, status, subscriptionId: shouldClearId ? null : sub.subscriptionId };
+        }
+        return sub;
+      }));
       setSweepDir(null);
 
-      // If the item leaves the current view (filtered out), we stay at the current index (which becomes the next item).
-      // If it stays (e.g. 'All' filter), we must advance the index.
+      // Advance Logic
       const itemLeaves = filter !== 'all' && filter !== status;
 
       if (itemLeaves) {
@@ -153,6 +180,55 @@ const App = () => {
     link.click();
   };
 
+  const downloadArchivePDF = () => {
+    const archived = subs.filter(s => s.status === 'archive');
+    if (archived.length === 0) {
+      alert("No archived channels to download yet!");
+      return;
+    }
+
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFillColor(41, 121, 255); // Blue
+    doc.rect(0, 0, 210, 20, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.text("SubStudio - Archived Channels", 14, 13);
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.text(`Generated on ${new Date().toLocaleDateString()}`, 14, 30);
+    doc.text(`Total Archived: ${archived.length}`, 14, 35);
+
+    const tableData = archived.map(sub => [
+      sub.name,
+      sub.handle,
+      sub.sub_count,
+      `https://www.youtube.com/channel/${sub.id}`
+    ]);
+
+    autoTable(doc, {
+      head: [['Channel Name', 'Handle', 'Subscribers', 'Link']],
+      body: tableData,
+      startY: 40,
+      theme: 'grid',
+      headStyles: { fillColor: [41, 121, 255] },
+      styles: { fontSize: 9 },
+      columnStyles: {
+        3: { textColor: [0, 0, 255] }
+      },
+      didDrawCell: (data) => {
+        if (data.section === 'body' && data.column.index === 3) {
+          const url = data.cell.raw;
+          doc.link(data.cell.x, data.cell.y, data.cell.width, data.cell.height, { url });
+        }
+      }
+    });
+
+    doc.save('substudio_archive_list.pdf');
+  };
+
   const handleLogout = () => {
     setIsApiMode(false);
     setSubs(subsData);
@@ -187,7 +263,24 @@ const App = () => {
             )}
             <div className="stat-chip" style={{ color: 'var(--accent-keep)' }}>KEEP • {stats.keep}</div>
             <div className="stat-chip" style={{ color: 'var(--accent-toss)' }}>TOSS • {stats.toss}</div>
-            <div className="stat-chip" style={{ color: 'var(--accent-archive)' }}>ARCHIVE • {stats.archive}</div>
+
+            {/* Archive Button for PDF Download */}
+            <button
+              className="stat-chip"
+              onClick={downloadArchivePDF}
+              style={{
+                color: 'var(--accent-archive)',
+                cursor: 'pointer',
+                background: 'rgba(41, 121, 255, 0.1)',
+                border: '1px solid rgba(41, 121, 255, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem'
+              }}
+              title="Download PDF List of Archived Channels"
+            >
+              ARCHIVE • {stats.archive} (PDF)
+            </button>
             <button onClick={exportData} className="premium-export">Export</button>
           </div>
         </div>

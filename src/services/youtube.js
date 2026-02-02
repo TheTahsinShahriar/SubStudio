@@ -107,3 +107,24 @@ export const deleteSubscription = async (subscriptionId) => {
         throw err;
     }
 };
+
+// Subscribe to a channel
+export const subscribeToChannel = async (channelId) => {
+    try {
+        const response = await window.gapi.client.youtube.subscriptions.insert({
+            part: 'snippet',
+            resource: {
+                snippet: {
+                    resourceId: {
+                        kind: 'youtube#channel',
+                        channelId: channelId
+                    }
+                }
+            }
+        });
+        return response.result;
+    } catch (err) {
+        console.error("Error subscribing:", err);
+        throw err;
+    }
+};
