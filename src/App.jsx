@@ -72,9 +72,26 @@ const App = () => {
     return `https://unavatar.io/youtube/${cleanHandle}`;
   };
 
-  const updateStatus = (id, status) => {
+  const updateStatus = async (id, status) => {
     const dirMap = { 'keep': 'right', 'toss': 'left', 'archive': 'down' };
     setSweepDir(dirMap[status]);
+
+    // Handle Unsubscribe (Toss) for API Mode
+    if (isApiMode && status === 'toss') {
+      const subToToss = subs.find(s => s.id === id);
+      if (subToToss && subToToss.subscriptionId) {
+        try {
+          await deleteSubscription(subToToss.subscriptionId);
+          console.log(`Unsubscribed from ${subToToss.name}`);
+        } catch (err) {
+          console.error("Failed to unsubscribe", err);
+          // Stop animation if it failed
+          setSweepDir(null);
+          alert("Could not unsubscribe. You might need to sign out and sign in again to grant permissions.");
+          return;
+        }
+      }
+    }
 
     setTimeout(() => {
       setSubs(prev => prev.map(sub => sub.id === id ? { ...sub, status } : sub));
@@ -132,6 +149,13 @@ const App = () => {
     link.click();
   };
 
+  const handleLogout = () => {
+    setIsApiMode(false);
+    setSubs(subsData);
+    setFilter('pending');
+    // Optional: revoke token if we store it, but for now just clearing state is enough to "logout" of the app view
+  };
+
   return (
     <div className="app-container">
       <div className="mesh-gradient"></div>
@@ -149,13 +173,13 @@ const App = () => {
           </div>
           <div className="stats-grid">
             {!isApiMode ? (
-              <button onClick={handleLogin} className="premium-export" style={{ background: 'var(--text-primary)', color: 'var(--bg-primary)' }}>
+              <button onClick={handleLogin} className="premium-export" style={{ background: 'var(--text-primary)', color: 'var(--bg-deep)' }}>
                 Sign In with Google
               </button>
             ) : (
-              <div className="stat-chip" style={{ background: 'rgba(255,255,255,0.1)' }}>
-                {isLoading ? 'Loading...' : 'Connected'}
-              </div>
+              <button onClick={handleLogout} className="premium-export" style={{ background: 'rgba(255,255,255,0.1)', color: 'var(--text-primary)' }}>
+                Sign Out
+              </button>
             )}
             <div className="stat-chip" style={{ color: 'var(--accent-keep)' }}>KEEP • {stats.keep}</div>
             <div className="stat-chip" style={{ color: 'var(--accent-toss)' }}>TOSS • {stats.toss}</div>
