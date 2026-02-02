@@ -568,6 +568,20 @@ kbd {
   transition: transform 0.2s ease;
 }
 
+
 .premium-export:hover {
   transform: scale(1.05);
+}
+
+.demo-badge {
+  background: var(--action-toss);
+  color: white;
+  font-size: 0.7rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  margin-left: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  box-shadow: 0 0 10px var(--action-toss);
 }

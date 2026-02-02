@@ -1,4 +1,4 @@
-const CLIENT_ID = 'YOUR_CLIENT_ID_HERE.apps.googleusercontent.com'; // TODO: Replace with user's Client ID
+const CLIENT_ID = '178752799662-cfvgsbbi16dgv3u84hetmg2u52oiqcfk.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
 
 let tokenClient;

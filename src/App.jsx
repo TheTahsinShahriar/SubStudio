@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import subsData from './data/subs.json';
+import { loadGoogleScripts, initTokenClient, handleLogin, fetchSubscriptions } from './services/youtube';
 import './index.css';
 
 const YouTubeIcon = () => (
@@ -15,6 +16,32 @@ const App = () => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [sweepDir, setSweepDir] = useState(null);
   const [isTinderMode, setIsTinderMode] = useState(false);
+
+  // API State
+  const [isApiMode, setIsApiMode] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Initialize Google Scripts
+  useEffect(() => {
+    loadGoogleScripts(
+      () => console.log('GAPI loaded'),
+      () => {
+        console.log('GIS loaded');
+        initTokenClient((accessToken) => {
+          setIsLoading(true);
+          fetchSubscriptions(accessToken)
+            .then(data => {
+              setSubs(data);
+              setIsApiMode(true);
+              setFilter('all');
+              // Auto-switch to swipe mode if many subs? Optional.
+            })
+            .catch(err => console.error(err))
+            .finally(() => setIsLoading(false));
+        });
+      }
+    );
+  }, []);
 
   const filteredSubs = useMemo(() => {
     return subs.filter(sub => {
@@ -36,6 +63,11 @@ const App = () => {
   }, [subs]);
 
   const getAvatar = (handle) => {
+    // If we have a direct avatar URL (from API), use it
+    const sub = subs.find(s => s.handle === handle);
+    if (sub && sub.avatar) return sub.avatar;
+
+    // Fallback to unavatar for demo data
     const cleanHandle = handle.replace('@', '');
     return `https://unavatar.io/youtube/${cleanHandle}`;
   };
@@ -49,14 +81,13 @@ const App = () => {
       setSweepDir(null);
 
       if (isTinderMode || filter === 'pending') {
-        // Next card will slide in but activeIndex stays 0 (usually) or the data shifts
         if (activeIndex >= filteredSubs.length - 1 && activeIndex > 0) {
           setActiveIndex(prev => prev - 1);
         }
       } else {
         setActiveIndex(prev => Math.min(prev + 1, filteredSubs.length - 1));
       }
-    }, 500); // Increased for smoother animations
+    }, 500);
   };
 
   const handleKeyDown = useCallback((e) => {
@@ -65,7 +96,6 @@ const App = () => {
     if (!currentSub) return;
     if (document.activeElement.tagName === 'INPUT') return;
 
-    // Contextual Shortcuts
     if (isTinderMode) {
       switch (e.key) {
         case 'ArrowRight': e.preventDefault(); updateStatus(currentSub.id, 'keep'); break;
@@ -85,7 +115,6 @@ const App = () => {
       }
     }
 
-    // Global Shortcuts
     if (e.key === 't' || e.key === 'T') setIsTinderMode(prev => !prev);
     if (e.key === 's' || e.key === '/' || e.key === 'S') { e.preventDefault(); document.querySelector('.search-field').focus(); }
   }, [filteredSubs, activeIndex, isTinderMode, filter]);
@@ -112,12 +141,22 @@ const App = () => {
           <div className="title-section">
             <YouTubeIcon />
             <h1>SubStudio</h1>
+            {!isApiMode && <span className="demo-badge">DEMO</span>}
             <div className="mode-pills">
               <button className={!isTinderMode ? 'active' : ''} onClick={() => setIsTinderMode(false)}>Discover</button>
               <button className={isTinderMode ? 'active' : ''} onClick={() => setIsTinderMode(true)}>Swipe</button>
             </div>
           </div>
           <div className="stats-grid">
+            {!isApiMode ? (
+              <button onClick={handleLogin} className="premium-export" style={{ background: 'var(--text-primary)', color: 'var(--bg-primary)' }}>
+                Sign In with Google
+              </button>
+            ) : (
+              <div className="stat-chip" style={{ background: 'rgba(255,255,255,0.1)' }}>
+                {isLoading ? 'Loading...' : 'Connected'}
+              </div>
+            )}
             <div className="stat-chip" style={{ color: 'var(--accent-keep)' }}>KEEP • {stats.keep}</div>
             <div className="stat-chip" style={{ color: 'var(--accent-toss)' }}>TOSS • {stats.toss}</div>
             <div className="stat-chip" style={{ color: 'var(--accent-archive)' }}>ARCHIVE • {stats.archive}</div>
@@ -129,7 +168,7 @@ const App = () => {
           <input
             type="text"
             className="search-field"
-            placeholder="Search channels, creators, or topics..."
+            placeholder="Search channels..."
             value={searchTerm}
             onChange={(e) => { setSearchTerm(e.target.value); setActiveIndex(0); }}
           />
@@ -149,7 +188,14 @@ const App = () => {
       </div>
 
       <div className={isTinderMode ? "tinder-viewport" : "grid"}>
-        {filteredSubs.map((sub, index) => {
+        {isLoading && (
+          <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '5rem' }}>
+            <h2>Fetching your subscriptions...</h2>
+            <p>This checks your public subscription list.</p>
+          </div>
+        )}
+
+        {!isLoading && filteredSubs.map((sub, index) => {
           const isActive = index === activeIndex;
           if (isTinderMode && !isActive) return null;
 
@@ -173,8 +219,12 @@ const App = () => {
                     <h3 className="channel-name">{sub.name}</h3>
                     <div className="channel-meta">
                       <span>{sub.handle}</span>
-                      <span>•</span>
-                      <span>{sub.sub_count}</span>
+                      {sub.sub_count !== 'Unknown' && (
+                        <>
+                          <span>•</span>
+                          <span>{sub.sub_count}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -185,8 +235,12 @@ const App = () => {
                   <h3 className="channel-name">{sub.name}</h3>
                   <div className="channel-meta" style={{ justifyContent: 'center', marginBottom: '1.5rem' }}>
                     <span>{sub.handle}</span>
-                    <span style={{ margin: '0 0.5rem' }}>•</span>
-                    <span>{sub.sub_count}</span>
+                    {sub.sub_count !== 'Unknown' && (
+                      <>
+                        <span style={{ margin: '0 0.5rem' }}>•</span>
+                        <span>{sub.sub_count}</span>
+                      </>
+                    )}
                   </div>
                 </>
               )}
@@ -217,7 +271,7 @@ const App = () => {
           );
         })}
 
-        {filteredSubs.length === 0 && (
+        {!isLoading && filteredSubs.length === 0 && (
           <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '10rem 0', opacity: 0.5 }}>
             <h2 style={{ fontSize: '2rem', marginBottom: '1rem' }}>All Clear!</h2>
             <p>No remaining subscriptions match your current filter.</p>
