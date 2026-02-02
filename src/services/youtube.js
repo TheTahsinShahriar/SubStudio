@@ -1,5 +1,5 @@
 const CLIENT_ID = '178752799662-cfvgsbbi16dgv3u84hetmg2u52oiqcfk.apps.googleusercontent.com';
-const SCOPES = 'https://www.googleapis.com/auth/youtube.readonly';
+const SCOPES = 'https://www.googleapis.com/auth/youtube'; // Full access required for delete
 
 let tokenClient;
 let gapiInited = false;
@@ -72,6 +72,7 @@ export const fetchSubscriptions = async (accessToken, pageToken = '', allSubs = 
 
         const items = response.result.items.map(item => ({
             id: item.snippet.resourceId.channelId,
+            subscriptionId: item.id, // Required for deletion
             name: item.snippet.title,
             handle: item.snippet.title, // YouTube API doesn't always give custom handle easily in this list, using Title for now
             sub_count: 'Unknown', // Requires separate channel lookup, keeping simple for now
@@ -89,6 +90,20 @@ export const fetchSubscriptions = async (accessToken, pageToken = '', allSubs = 
         return newAllSubs;
     } catch (err) {
         console.error("Error fetching subs", err);
+        throw err;
+    }
+};
+
+// Unsubscribe from a channel
+export const deleteSubscription = async (subscriptionId) => {
+    if (!subscriptionId) throw new Error("No subscription ID provided");
+    try {
+        await window.gapi.client.youtube.subscriptions.delete({
+            id: subscriptionId
+        });
+        return true;
+    } catch (err) {
+        console.error("Error deleting subscription:", err);
         throw err;
     }
 };

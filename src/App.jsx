@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import subsData from './data/subs.json';
-import { loadGoogleScripts, initTokenClient, handleLogin, fetchSubscriptions } from './services/youtube';
+import { loadGoogleScripts, initTokenClient, handleLogin, fetchSubscriptions, deleteSubscription } from './services/youtube';
 import './index.css';
 
 const YouTubeIcon = () => (
